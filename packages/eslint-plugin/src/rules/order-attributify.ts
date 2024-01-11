@@ -23,6 +23,30 @@ export default createRule({
   defaultOptions: [],
   create(context) {
     const scriptVisitor: RuleListener = {
+      JSXElement(node) {
+        const valueless = node.openingElement.attributes.filter((i): i is TSESTree.JSXAttribute => i.type === 'JSXAttribute' && !IGNORE_ATTRIBUTES.includes(i.name.type === 'JSXIdentifier' ? i.name.name : `${i.name.namespace}:${i.name.name}`) && i.value == null)
+        if (!valueless.length)
+          return
+        const input = valueless.map(i => i.name.type === 'JSXIdentifier' ? i.name.name : `${i.name.namespace}:${i.name.name}`).join(' ').trim()
+        const sorted = syncAction('sort', input)
+        if (sorted !== input) {
+          context.report({
+            node,
+            messageId: 'invalid-order',
+            fix(fixer) {
+              const codeFull = context.sourceCode
+              const offset = node.range[0]
+              const code = codeFull.getText().slice(node.range[0], node.range[1])
+              const s = new MagicString(code)
+              const sortedNodes = valueless.map(i => [i.range[0] - offset, i.range[1] - offset]).sort((a, b) => b[0] - a[0])
+              for (const [start, end] of sortedNodes.slice(1))
+                s.remove(start, end)
+              s.overwrite(sortedNodes[0][0], sortedNodes[0][1], ` ${sorted.trim()}`)
+              return fixer.replaceText(node, s.toString())
+            },
+          })
+        }
+      },
     }
 
     const templateBodyVisitor: RuleListener = {
